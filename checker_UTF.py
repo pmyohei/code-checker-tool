@@ -2290,16 +2290,18 @@ def getLineKind( line ):
             CtrlFLg = LINEKIND.OTHER
 
     if CtrlFLg != LINEKIND.OTHER:
-        print("========")
-        print("", ReadLineNum, ":", line)
+        print("★★=======★★")
+        print("", line)
         print("CtrlFLg=", CtrlFLg)
         return CtrlFLg
+        print("★★★★")
 
     #if文、else if文
     ret = re.search(' if | if\(| else[ +]if| else[ +]if\(', line)
     if ret != None:
-        # この行で閉じていなければ、制御文中にする
-        if ')' not in line:
+        # この行で閉じていなければ、制御文扱いとする
+        isOneLine = isConditionalStatementOneLine( line )
+        if not isOneLine:
             CtrlFLg = LINEKIND.IF_ELSEIF
             
         ##print('if文、else if文')
@@ -2314,8 +2316,8 @@ def getLineKind( line ):
     #while文、for文
     ret = re.search(' while | while\(| for | for\(', line)
     if ret != None:
-        # この行で閉じていなければ、制御文中にする
-        if (')' not in line) and ('{' not in line):
+        isOneLine = isConditionalStatementOneLine( line )
+        if not isOneLine:
             CtrlFLg = LINEKIND.LOOP
 
         ##print('ループ文')
@@ -2411,27 +2413,35 @@ def checkTopLineCommentAppropriate( line, preLine ):
         return False
 
 
-#--------------------------
+#------------------------------------
 # コメント必須箇所にコメントがあるか
-#--------------------------
+#------------------------------------
 def isCommentExist( line, preLine, lineKind ):
 
-    #コメント必須文ではないなら、検証不要
+    # コメント必須文ではないなら、検証不要
     if lineKind == LINEKIND.OTHER or lineKind == LINEKIND.FUNC_DEFINITION or lineKind == LINEKIND.INCLUDE:
         return
 
-    #=========================
-    # 以下、コメント必須文
-    #=========================
+    # 判定対象行が制御文の場合、「2行目以降の条件文」であれば、コメント不要
+    isSecondLine = isSecondLineConditionalStatement( line, lineKind )
+    print("=============")
+    print("", line)
+    print("isSecondLine=", isSecondLine)
+    if isSecondLine:
+        return
+
+    #=============================
+    # コメント必須文の判定
+    #=============================
 
     # 右にコメントがあるか
     if '/*' in line:
         # 右にあるなら、問題なし
         return
 
-    #=========================
+    #=================
     # 右にコメントなし
-    #=========================
+    #=================
 
     # 必須行の種類を表示用文字列として保持
     msgKind = getLineKindStr(lineKind)
@@ -2448,9 +2458,9 @@ def isCommentExist( line, preLine, lineKind ):
         writeViolation( VIOLATION_TYPE_REQUIRED_COMMENT, 'なし_' + msgKind, '')
         return
 
-    #=========================
+    #=================
     # 上にコメントあり
-    #=========================
+    #=================
 
     # 上に書いてよい状態かチェック
     ret = checkTopLineCommentAppropriate( line, preLine )
@@ -2465,6 +2475,67 @@ def isCommentExist( line, preLine, lineKind ):
         writeViolation( VIOLATION_TYPE_REQUIRED_COMMENT, '上行へのコメント記載は不適切_' + msgKind, '')
 
     return
+
+
+#------------------------------
+# 指定された制御文が1行のみかどうか
+#   
+#   例1) if( ~~~~~~ ) : true
+#
+#   例2) if( ~~~~~~   : false
+#            ~~~ )
+#------------------------------
+def isConditionalStatementOneLine( line ):
+
+    #=======================
+    # 「(」と「)」の数で判定
+    #=======================
+    openNum = line.count('(')
+    closeNum = line.count(')')
+
+    # 括弧の数が不一致なら、2行目以降に続いている
+    if openNum != closeNum:
+        # 1行ではない
+        return False
+
+    # 1行のみ
+    return True
+
+#------------------------------
+# 2行目以降の条件文かどうかの判定
+#   
+#   例)  for ( ~~~　　：false
+#            ~~~~　　 ：true
+#            ~~~~ )　 ：true
+#------------------------------
+def isSecondLineConditionalStatement( line, lineKind ):
+
+    #==============
+    # 制御文かどうか
+    #==============
+    # そもそも、制御文でないなら何もしない
+    if ( lineKind != LINEKIND.IF_ELSEIF and
+         lineKind != LINEKIND.LOOP ):
+         return False
+        
+    #==============
+    # 制御文
+    #==============
+    # if, else if 判定
+    ret = re.search(' if | if\(| else[ +]if| else[ +]if\(', line)
+    if ret != None:
+        # 1行目に存在するワードがあるなら、2行目以降の制御文ではない
+        return False
+
+    # for, while 判定
+    ret = re.search(' while | while\(| for | for\(', line)
+    if ret != None:
+        # 1行目に存在するワードがあるなら、2行目以降の制御文ではない
+        return False
+
+
+    # 2行目以降と判定
+    return True
 
 #--------------------------
 # 全般の内容
