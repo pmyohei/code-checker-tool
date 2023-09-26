@@ -2280,11 +2280,20 @@ def getLineKind( line ):
     if '#define' in line :
         return LINEKIND.DEFINE
 
-
+    #--------------------------------------
+    # 制御文が2行以上に渡ってるかを判定する用
+    #--------------------------------------
     global CtrlFLg
     if CtrlFLg != LINEKIND.OTHER:
         if '{' in line:
+            # 制御文の処理開始ワード「{」があれば、制御条件文（例：for(～～) ）は終了
             CtrlFLg = LINEKIND.OTHER
+
+    if CtrlFLg != LINEKIND.OTHER:
+        print("========")
+        print("", ReadLineNum, ":", line)
+        print("CtrlFLg=", CtrlFLg)
+        return CtrlFLg
 
     #if文、else if文
     ret = re.search(' if | if\(| else[ +]if| else[ +]if\(', line)
@@ -2311,10 +2320,6 @@ def getLineKind( line ):
 
         ##print('ループ文')
         return LINEKIND.LOOP
-
-
-
-
 
     #switch文, case文
     ret = re.search(' switch | switch\(| case | default | default:', line)
@@ -2348,7 +2353,7 @@ def getLineKind( line ):
         return LINEKIND.RETURN
 
     #代入処理
-    ret = re.search('=', line)
+    ret = re.search('[^!=<>]=[^=]', line)
     if ret != None:
         return LINEKIND.SUBSTITUTE
 
