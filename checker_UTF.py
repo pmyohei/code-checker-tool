@@ -230,6 +230,14 @@ OS_LINUX     = 1
 # 「platform.system()」をコールして取得できるwindows文字列
 OS_WINDOWS_STR = 'Windows'
 
+# 文中の「(」「)」の数
+BRACKET_EVEN   = 0
+BRACKET_MORE_OPEN   = 1
+BRACKET_MORE_CLOSE  = 2
+
+# 共通：判定不可
+UNABLE_JUDGE   = 0xFF
+
 #-------------------
 # 表示メッセージ
 #-------------------
@@ -263,7 +271,7 @@ StructReadFLg           = False             #構造体チェック中（構造�
 StructDeclarationFLg    = False             #構造体の宣言コメントチェック済みフラグ（False = 未チェック） ★ファイルが複数ある場合には、再初期化必須
 FuncPrototypeReadFLg    = False             #関数プロトタイプチェック中（判定している間はTrueにする）
 CallPrintfFLg           = False             #printf()コール中（コール中の行の場合はTrueにする）
-CtrlFLg                 = LINEKIND.OTHER    #制御文の()中（コール中の行の場合はTrueにする）
+ContinueLineKind        = LINEKIND.OTHER    #制御文の()中（コール中の行の場合はTrueにする）
 
 #-- 記述位置 --#
 PreDefine1stPos = 0                    #文字列１の記述位置（単位：カラム）：define用
@@ -1428,10 +1436,16 @@ def checkFrontSpaceBrackets( preStr ):
 #------------------------------------------
 def getFrontSpace( word, line, num ):
 
-    #指定文字がなければ
+    #------------------
+    # 判定不要の判定
+    #------------------
+    # 指定文字なし
     if word not in line:
-        return 0xFF
+        return UNABLE_JUDGE
 
+    #------------------
+    # 判定
+    #------------------
     #指定文字で分割
     str = line.split(word)
 
@@ -1465,11 +1479,16 @@ def getFrontSpace( word, line, num ):
 #   　　　　　※1文字目 = 0
 #------------------------------------------
 def getRearSpace( word, line, num ):
-
+    #------------------
+    # 判定不要の判定
+    #------------------
     #指定文字がなければ
     if word not in line:
-        return 0xFF
+        return UNABLE_JUDGE
 
+    #------------------
+    # 判定
+    #------------------
     #指定文字で分割
     splitStr = line.split(word)
 
@@ -1488,6 +1507,37 @@ def getRearSpace( word, line, num ):
             break
 
     return count
+
+#------------------------------------------
+# 指定された文字の直前にある文字が全て空白かどうか
+#------------------------------------------
+def isFrontAllSpace( word, line ):
+
+    #------------------
+    # 判定不要の判定
+    #------------------
+    #指定文字がなければ
+    if word not in line:
+        return False
+
+    #------------------
+    # 判定
+    #------------------
+    # 指定文字で分割
+    tmpStr = line.split(word)
+    # 指定文字より前の文字列
+    checkStr = tmpStr[0]
+    length = len(checkStr)
+
+    #カウント
+    count = 0
+    for i in reversed( range( 0, length ) ):
+        if checkStr[i] != ' ':
+            print('前方全て空白ではない')
+            return False
+            
+    print('前方全て空白！！')
+    return True
 
 #------------------------------------------
 # 指定された文字の左と右に、特定の記号があるかチェック
@@ -1676,14 +1726,17 @@ def checkSpaceBrackets( line, lineKind ):
 
         #「(」の直前の空白数
         spaceNum = getFrontSpace('(', line, 0)
-        if spaceNum != 1 and spaceNum != 0xFF:
+        # 「(」の前が全て空白かどうか
+        isAllSpace = isFrontAllSpace('(', line)
+        if (( spaceNum != 1 and spaceNum != UNABLE_JUDGE ) and
+            ( not isAllSpace ) ):
             #制御文は空白1つのみのため、違反
             #print('【文の表現】「(」の左が空白1つではない')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「(」の左が空白1つではない', '')
 
         #「(」の直後の空白数
         spaceNum = getRearSpace('(', line, 0)
-        if spaceNum != 0 and spaceNum != 1 and spaceNum != 0xFF:
+        if spaceNum != 0 and spaceNum != 1 and spaceNum != UNABLE_JUDGE:
             #制御文は空白2つ以上なら、違反
             #print('【文の表現】「(」の右の空白数が多い')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「(」の右の空白数が多い', '')
@@ -1694,31 +1747,33 @@ def checkSpaceBrackets( line, lineKind ):
 
             #「)」の直前の空白数
             spaceNum = getFrontSpace(')', line, 0xFF)
-            if spaceNum != 0 and spaceNum != 1 and spaceNum != 0xFF:
+            if spaceNum != 0 and spaceNum != 1 and spaceNum != UNABLE_JUDGE:
                 #制御文は空白1つのみのため、違反
                 #print('【文の表現】「)」の左の空白数が多い')
                 writeViolation( VIOLATION_TYPE_SENTENCE, '「)」の左の空白数が多い', '')
 
     #関数定義／関数コール
     elif lineKind == LINEKIND.CALL_FUNC:
-        #「(」の直前の空白数
+        # 「(」の直前の空白数
         spaceNum = getFrontSpace('(', line, 0)
-        if spaceNum >= 2 and spaceNum != 0xFF:
+        # 「(」の前が全て空白かどうか
+        isAllSpace = isFrontAllSpace('(', line)
+        if (( spaceNum >= 2 and spaceNum != UNABLE_JUDGE ) and
+            ( not isAllSpace ) ) :
             #空白1つのみのため、違反
             #print('【余計な空白】「(」の左に空白が複数あり')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「(」の左に空白が複数あり', '')
 
-
         #「(」の直後の空白数
         spaceNum = getRearSpace('(', line, 0)
-        if spaceNum >= 2 and spaceNum != 0xFF:
+        if spaceNum >= 2 and spaceNum != UNABLE_JUDGE:
             #空白不要のため、違反
             #print('【余計な空白】「(」の右に空白が複数あり')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「(」の右に空白が複数あり', '')
 
         #「)」の直前の空白数
         spaceNum = getFrontSpace(')', line, 0)
-        if spaceNum >= 2 and spaceNum != 0xFF:
+        if spaceNum >= 2 and spaceNum != UNABLE_JUDGE:
             #空白不要のため、違反
             #print('【余計な空白】「)」の左に空白が複数あり')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「)」の左に空白が複数あり', '')
@@ -1727,21 +1782,21 @@ def checkSpaceBrackets( line, lineKind ):
     elif lineKind == LINEKIND.FUNC_PROTOTYPE:
         #「(」の直前の空白数
         spaceNum = getFrontSpace('(', line, 0)
-        if spaceNum != 0 and spaceNum != 0xFF:
+        if spaceNum != 0 and spaceNum != UNABLE_JUDGE:
             #空白不要のため、違反
             #print('【文の表現】「(」の左が空白1つではない2')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「(」の左が空白1つではない', '')
 
         #「(」の直後の空白数
         spaceNum = getRearSpace('(', line, 0)
-        if spaceNum != 0 and spaceNum != 0xFF:
+        if spaceNum != 0 and spaceNum != UNABLE_JUDGE:
             #空白不要のため、違反
             #print('【文の表現】「(」の右が空白1つではない')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「(」の右が空白1つではない', '')
 
         #「)」の直前の空白数
         spaceNum = getFrontSpace(')', line, 0)
-        if spaceNum != 0 and spaceNum != 0xFF:
+        if spaceNum != 0 and spaceNum != UNABLE_JUDGE:
             #空白不要のため、違反
             #print('【文の表現】「)」の左が空白1つではない')
             writeViolation( VIOLATION_TYPE_SENTENCE, '「)」の左が空白1つではない', '')
@@ -2267,9 +2322,37 @@ def judgeMoldType( line ):
 #--------------------------
 def getLineKind( line ):
 
+    #--------------------------------------
+    # 処理文が2行以上に渡ってるかを判定する用
+    #--------------------------------------
+    global ContinueLineKind
+    
+    #---------------
+    # 継続行終了判定
+    #---------------
+    isFinish = isFinishContinueLine(line, ContinueLineKind)
+    if isFinish:
+        # 前回行の種別を保持
+        currentKind = ContinueLineKind
+        # 継続行情報はクリア
+        ContinueLineKind = LINEKIND.OTHER
+        return currentKind
+
+    #---------------
+    # 継続行判定
+    #---------------
+    # 行が継続しているなら、継続中の種別を返して終わり
+    if ContinueLineKind != LINEKIND.OTHER:
+        return ContinueLineKind
+
+
+    #--------------------------------------
+    # 行種別判定
+    #--------------------------------------
     #型あり行の判定
     ret = judgeMoldType(line)
     if ret != LINEKIND.OTHER:
+        print("初めのOther判定")
         return ret
 
     #include
@@ -2280,29 +2363,15 @@ def getLineKind( line ):
     if '#define' in line :
         return LINEKIND.DEFINE
 
-    #--------------------------------------
-    # 制御文が2行以上に渡ってるかを判定する用
-    #--------------------------------------
-    global CtrlFLg
-    if CtrlFLg != LINEKIND.OTHER:
-        if '{' in line:
-            # 制御文の処理開始ワード「{」があれば、制御条件文（例：for(～～) ）は終了
-            CtrlFLg = LINEKIND.OTHER
-
-    if CtrlFLg != LINEKIND.OTHER:
-        print("★★=======★★")
-        print("", line)
-        print("CtrlFLg=", CtrlFLg)
-        return CtrlFLg
-        print("★★★★")
-
     #if文、else if文
     ret = re.search(' if | if\(| else[ +]if| else[ +]if\(', line)
     if ret != None:
-        # この行で閉じていなければ、制御文扱いとする
-        isOneLine = isConditionalStatementOneLine( line )
-        if not isOneLine:
-            CtrlFLg = LINEKIND.IF_ELSEIF
+        # この行で閉じていなければ、継続行とする
+        bracketInfo = getBracketInfo( line )
+        if bracketInfo == BRACKET_MORE_OPEN:
+            ContinueLineKind = LINEKIND.IF_ELSEIF
+            # print("この行は継続判定=", line)
+            # print("ContinueLineKind=", ContinueLineKind)
             
         ##print('if文、else if文')
         return LINEKIND.IF_ELSEIF
@@ -2316,9 +2385,9 @@ def getLineKind( line ):
     #while文、for文
     ret = re.search(' while | while\(| for | for\(', line)
     if ret != None:
-        isOneLine = isConditionalStatementOneLine( line )
-        if not isOneLine:
-            CtrlFLg = LINEKIND.LOOP
+        bracketInfo = getBracketInfo( line )
+        if bracketInfo == BRACKET_MORE_OPEN:
+            ContinueLineKind = LINEKIND.LOOP
 
         ##print('ループ文')
         return LINEKIND.LOOP
@@ -2329,30 +2398,35 @@ def getLineKind( line ):
         ##print('switch文, case文')
         return LINEKIND.SWITCH
 
-    #関数コール
-    if ( ('(' in line) and (')' in line) and (';' in line) ) \
-        or ( ('(' in line) and (';' not in line) ):
-        #「(」「)」「;」あり or 「(」あり「;」なし
-
-        #条件式が含まれているか
-        ret = hasConditionaloperator(line)
-
-        #条件演算子がないなら
-        if not ret:
-
-            #return文ではない
-            #if 'return' not in line:
-            #「(」の前に関数名がある
-            ret = re.search('^ +\(', line)
-            if ret == None:
-               #print('関数コール')
-               return LINEKIND.CALL_FUNC
-
     #return文
     ret = re.search('return', line)
     if ret != None:
         ##print('return文')
         return LINEKIND.RETURN
+
+    #関数コール
+    if ( ('(' in line) and (')' in line) and (';' in line) ) \
+        or ( ('(' in line) and (';' not in line) ):
+        #「(」「)」「;」あり or 「(」あり「;」なし
+
+        #条件演算子が含まれているか
+        ret = hasConditionalOperator(line)
+
+        #条件演算子がないなら
+        if not ret:
+
+            #「(」の前に空白以外の文字があるか
+            ret = re.search('^ +\(', line)
+            if ret == None:
+                # あり（=「(」前が空白ではない）
+
+                # この行で閉じていなければ、継続行とする
+                bracketInfo = getBracketInfo( line )
+                if bracketInfo == BRACKET_MORE_OPEN:
+                    ContinueLineKind = LINEKIND.CALL_FUNC
+
+                #print('関数コール')
+                return LINEKIND.CALL_FUNC
 
     #代入処理
     ret = re.search('[^!=<>]=[^=]', line)
@@ -2362,10 +2436,34 @@ def getLineKind( line ):
     #その他
     return LINEKIND.OTHER
 
+
+
+#--------------------------------------
+# 2行以上の処理文終了判定
+# 例) 
+#
+#
+#--------------------------------------
+def isFinishContinueLine(line, lineKind):
+
+    # そもそも継続していないなら、何もしない
+    if lineKind == LINEKIND.OTHER:
+        return False
+
+    #============
+    # 制御文
+    #============
+    bracketInfo = getBracketInfo( line )
+    if bracketInfo == BRACKET_MORE_CLOSE:
+        # 閉じ括弧の方が置ければ、継続していた文は終了
+        return True
+
+    return False
+
 #--------------------------------------
 # 条件演算子が行に含まれているか判定
 #--------------------------------------
-def hasConditionaloperator(line):
+def hasConditionalOperator(line):
 
     for ope in CONDITIONAL_OPE:
         if ope in line:
@@ -2394,11 +2492,8 @@ def checkTopLineCommentAppropriate( line, preLine ):
         # コメントが詰まる場合は、問題なし
         return True
 
-    # 次の行に処理が続く(処理が終了していない)場合は、問題なし
-    ret  = re.search(';$', line)
-    ret2 = re.search('^ *for|^ *while|^ *if', line)
-    # if (ret == None) or (ret != None and ret2 != None):
-    if (ret != None) and (ret2 != None):
+    # 継続行ありなら、文が続いている状態のため問題なし
+    if ContinueLineKind != LINEKIND.OTHER:
         return True
 
     # 上の行のコメント開始位置を取得(単位：カラム)
@@ -2424,12 +2519,14 @@ def isCommentExist( line, preLine, lineKind ):
 
     # 判定対象行が制御文の場合、「2行目以降の条件文」であれば、コメント不要
     isSecondLine = isSecondLineConditionalStatement( line, lineKind )
-    print("=============")
-    print("", line)
-    print("isSecondLine=", isSecondLine)
     if isSecondLine:
         return
 
+    # 判定対象行が関数コールの場合、「2行目以降の文」であれば、コメント不要
+    isSecondLine = isSecondLineCallFuncStatement( line, lineKind )
+    if isSecondLine:
+        return
+    
     #=============================
     # コメント必須文の判定
     #=============================
@@ -2450,10 +2547,6 @@ def isCommentExist( line, preLine, lineKind ):
     ret = re.search('\/\*[A-Za-z ]*\*\/', preLine)
     if (('/*' not in preLine) or ( ret != None )) :
         
-        # 制御文中の代入処理なら違反ではない
-        if (lineKind == LINEKIND.SUBSTITUTE) and (CtrlFLg != LINEKIND.OTHER):
-            return
-
         # 上にもコメントがないなら、違反
         writeViolation( VIOLATION_TYPE_REQUIRED_COMMENT, 'なし_' + msgKind, '')
         return
@@ -2465,10 +2558,6 @@ def isCommentExist( line, preLine, lineKind ):
     # 上に書いてよい状態かチェック
     ret = checkTopLineCommentAppropriate( line, preLine )
     if not ret:
-
-        # 制御文中の代入処理なら違反ではない
-        if (lineKind == LINEKIND.SUBSTITUTE) and (CtrlFLg != LINEKIND.OTHER):
-            return
 
         # 上の行でのコメントは不適切
         # print('【必須コメント】上行へのコメント記載は不適切_' + msgKind)
@@ -2485,21 +2574,21 @@ def isCommentExist( line, preLine, lineKind ):
 #   例2) if( ~~~~~~   : false
 #            ~~~ )
 #------------------------------
-def isConditionalStatementOneLine( line ):
+def getBracketInfo( line ):
 
     #=======================
-    # 「(」と「)」の数で判定
+    # 「(」と「)」の数
     #=======================
     openNum = line.count('(')
     closeNum = line.count(')')
 
-    # 括弧の数が不一致なら、2行目以降に続いている
-    if openNum != closeNum:
-        # 1行ではない
-        return False
+    if openNum > closeNum:
+        return BRACKET_MORE_OPEN
 
-    # 1行のみ
-    return True
+    if openNum < closeNum:
+        return BRACKET_MORE_CLOSE
+
+    return BRACKET_EVEN
 
 #------------------------------
 # 2行目以降の条件文かどうかの判定
@@ -2535,6 +2624,45 @@ def isSecondLineConditionalStatement( line, lineKind ):
 
 
     # 2行目以降と判定
+    return True
+
+
+#------------------------------
+# 2行目以降の関数コール文かどうかの判定
+#   
+#   例)  printf ( ~~~　　：false
+#            ~~~~　　 ：true
+#            ~~~~ )　 ：true
+#------------------------------
+def isSecondLineCallFuncStatement( line, lineKind ):
+
+    #==============
+    # 関数コール文かどうか
+    #==============
+    # そもそも、制御文でないなら何もしない
+    if lineKind != LINEKIND.CALL_FUNC :
+         return False
+        
+    #==============
+    # 関数コール文
+    #==============
+    bracketInfo = getBracketInfo( line )
+    
+    # 「(」の数が「)」より多ければ、1行目確定
+    if bracketInfo == BRACKET_MORE_OPEN:
+        return False
+
+    # 「(」の数が「)」より少なければ、最終行確定
+    if bracketInfo == BRACKET_MORE_CLOSE:
+        return True
+
+    # 「(」と「)」が同数
+    # 継続行の情報で判定する。
+    # 継続行がその他なら、1行目確定
+    if ContinueLineKind == LINEKIND.OTHER:
+        return False
+
+    # 2行目以降の中間行
     return True
 
 #--------------------------
@@ -3819,15 +3947,12 @@ def readFile(fileName):
             #最後の行の次の行は空
             nextLine = ''
 
-        #print(line)
-        #print(countLine(line))
-
         #文の種別を取得
         lineKind = getLineKind(line)
 
-        # print(line)
-        # print(getLineKindStr(lineKind))
-        # print("----------------------------")
+        print(line)
+        print('lineKind=', lineKind)
+        print("-■■■■■■■■■-----------")
 
         # print(line)
         # print("種別=" + getLineKindStr(lineKind))
